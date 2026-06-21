@@ -1,3 +1,5 @@
+package com.example.studenthub.data
+
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -9,16 +11,32 @@ data class Task(
 
     @ColumnInfo(name = "title")
     val title: String,
-    // Contoh: "Review Proposal Transparaksi" atau "Siapin Materi Mentoring Mobile"
 
     @ColumnInfo(name = "deadline")
     val deadline: Long,
-    // Disimpan pakai tipe data Long (Timestamp) biar gampang di-sorting
 
     @ColumnInfo(name = "category")
     val category: String,
-    // Contoh: "Kuliah", "GDGoC", "SAG", "Lomba"
 
     @ColumnInfo(name = "is_completed")
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+
+    @ColumnInfo(name = "description")
+    val description: String = "",
+
+    @ColumnInfo(name = "priority")
+    val priority: Int = 2,
+    // 1: Low, 2: Medium, 3: High
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "attachment_path")
+    val attachmentPath: String = "",
+
+    @ColumnInfo(name = "notes")
+    val notes: String = ""
 )
