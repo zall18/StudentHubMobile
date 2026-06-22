@@ -1,239 +1,962 @@
 ﻿package com.example.studenthub.ui.screens
 
 import StudentHubViewModel
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.studenthub.data.Achievement
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AchievementsScreen(viewModel: StudentHubViewModel) {
     val achievements by viewModel.allAchievements.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableStateOf("CERTIFICATION") }
+    var selectedCategory by remember { mutableStateOf("ALL") }
+    var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var editingAchievement by remember { mutableStateOf<Achievement?>(null) }
 
+    // Form fields
     var title by remember { mutableStateOf("") }
     var issuer by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("CERTIFICATION") }
     var description by remember { mutableStateOf("") }
     var credentialUrl by remember { mutableStateOf("") }
     var credentialId by remember { mutableStateOf("") }
-    var filePath by remember { mutableStateOf("") }
     var importance by remember { mutableStateOf("2") }
     var expiryDate by remember { mutableStateOf("") }
 
-    val tabs = listOf("CERTIFICATION", "AWARD", "COMPETITION", "BADGE", "ALL")
-    val visibleAchievements = when (selectedTab) {
-        "ALL" -> achievements
-        else -> achievements.filter { it.category == selectedTab }
+    val tabs = listOf(
+        "ALL" to "Semua",
+        "CERTIFICATION" to "Sertifikasi",
+        "AWARD" to "Penghargaan",
+        "COMPETITION" to "Kompetisi",
+        "BADGE" to "Badge"
+    )
+
+    val filteredAchievements = remember(achievements, selectedCategory, searchQuery) {
+        val baseList = when (selectedCategory) {
+            "ALL" -> achievements
+            else -> achievements.filter { it.category == selectedCategory }
+        }
+
+        if (searchQuery.isNotBlank()) {
+            baseList.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                        it.issuer.contains(searchQuery, ignoreCase = true) ||
+                        it.description.contains(searchQuery, ignoreCase = true)
+            }
+        } else {
+            baseList
+        }
+    }.sortedByDescending { it.importance }
+
+    // Stats
+    val totalAchievements = achievements.size
+    val highImportanceCount = remember(achievements) {
+        achievements.count { it.importance == 3 }
+    }
+    val uniqueIssuers = remember(achievements) {
+        achievements.map { it.issuer }.distinct().size
     }
 
     Scaffold(
+        containerColor = Color(0xFFF8F9FA),
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = Color(0xFF0066FF),
-                contentColor = Color.White
+                onClick = {
+                    resetForm()
+                    showAddDialog = true
+                },
+                containerColor = Color(0xFF2563EB),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Tambah Achievement")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Tambah Achievement",
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(innerPadding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Header
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Achievements & Certifications", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
-                Text(text = "Simpan pencapaian, sertifikat, dan award penting", fontSize = 14.sp, color = Color.Gray)
-            }
-
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(tabs.size) { index ->
-                        val tab = tabs[index]
-                        FilterChip(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            label = { Text(if (tab == "ALL") "Semua" else tab) }
-                        )
-                    }
-                }
-            }
-
-            if (visibleAchievements.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "Belum ada achievement", color = Color.Gray)
-                    }
-                }
-            } else {
-                items(visibleAchievements, key = { it.id }) { achievement ->
-                    AchievementCard(
-                        achievementTitle = achievement.title,
-                        achievementIssuer = achievement.issuer,
-                        achievementCategory = achievement.category,
-                        achievementImportance = achievement.importance,
-                        achievementExpiry = achievement.expiryDate,
-                        onDelete = { viewModel.deleteAchievement(achievement.id) }
+                Column {
+                    Text(
+                        text = "Achievements",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF111827)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "$totalAchievements pencapaian • $highImportanceCount penting",
+                        fontSize = 14.sp,
+                        color = Color(0xFF6B7280)
                     )
                 }
+            }
+
+            // Stats Summary
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StatCard(
+                        icon = Icons.Outlined.EmojiEvents,
+                        value = totalAchievements.toString(),
+                        label = "Total",
+                        containerColor = Color(0xFFEFF6FF),
+                        contentColor = Color(0xFF2563EB),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    StatCard(
+                        icon = Icons.Outlined.Star,
+                        value = highImportanceCount.toString(),
+                        label = "Penting",
+                        containerColor = Color(0xFFFEF2F2),
+                        contentColor = Color(0xFFDC2626),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    StatCard(
+                        icon = Icons.Outlined.Business,
+                        value = uniqueIssuers.toString(),
+                        label = "Institusi",
+                        containerColor = Color(0xFFFAF5FF),
+                        contentColor = Color(0xFF7C3AED),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Search Bar
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Cari achievement...") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Search,
+                            contentDescription = "Search"
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    Icons.Outlined.Close,
+                                    contentDescription = "Clear"
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
+                    )
+                )
+            }
+
+            // Category Filters
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Kategori",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF374151)
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(tabs.size) { index ->
+                            val (tabKey, tabLabel) = tabs[index]
+                            FilterChip(
+                                selected = selectedCategory == tabKey,
+                                onClick = { selectedCategory = tabKey },
+                                label = {
+                                    Text(
+                                        text = tabLabel,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (selectedCategory == tabKey) FontWeight.Medium else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = if (selectedCategory == tabKey) {
+                                    {
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF2563EB),
+                                    selectedLabelColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Results count
+            item {
+                if (filteredAchievements.isNotEmpty()) {
+                    Text(
+                        text = "${filteredAchievements.size} achievement ditemukan",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF374151)
+                    )
+                }
+            }
+
+            // Achievement List
+            if (filteredAchievements.isEmpty()) {
+                item {
+                    EmptyAchievementState()
+                }
+            } else {
+                items(filteredAchievements, key = { it.id }) { achievement ->
+                    val context = LocalContext.current
+                    EnhancedAchievementCard(
+                        achievement = achievement,
+                        onEdit = {
+                            editingAchievement = achievement
+                            title = achievement.title
+                            issuer = achievement.issuer
+                            category = achievement.category
+                            description = achievement.description
+                            credentialUrl = achievement.credentialUrl
+                            credentialId = achievement.credentialId
+                            importance = achievement.importance.toString()
+                            expiryDate = achievement.expiryDate?.toString() ?: ""
+                            showAddDialog = true
+                        },
+                        onDelete = { viewModel.deleteAchievement(achievement.id) },
+                        onOpenUrl = {
+                            if (achievement.credentialUrl.isNotBlank()) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(achievement.credentialUrl))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Handle invalid URL
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
 
+    // Add/Edit Achievement Dialog
     if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = {
+        AchievementDialog(
+            isEditing = editingAchievement != null,
+            title = title,
+            onTitleChange = { title = it },
+            issuer = issuer,
+            onIssuerChange = { issuer = it },
+            category = category,
+            onCategoryChange = { category = it },
+            description = description,
+            onDescriptionChange = { description = it },
+            credentialUrl = credentialUrl,
+            onCredentialUrlChange = { credentialUrl = it },
+            credentialId = credentialId,
+            onCredentialIdChange = { credentialId = it },
+            importance = importance,
+            onImportanceChange = { importance = it },
+            onDismiss = {
                 showAddDialog = false
-                title = ""
-                issuer = ""
-                category = "CERTIFICATION"
-                description = ""
-                credentialUrl = ""
-                credentialId = ""
-                filePath = ""
-                importance = "2"
-                expiryDate = ""
+                editingAchievement = null
+                resetForm()
             },
-            title = { Text("Tambah Achievement") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = issuer, onValueChange = { issuer = it }, label = { Text("Issuer") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = credentialId, onValueChange = { credentialId = it }, label = { Text("Credential ID") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = credentialUrl, onValueChange = { credentialUrl = it }, label = { Text("Credential URL") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = filePath, onValueChange = { filePath = it }, label = { Text("File Path") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = importance, onValueChange = { importance = it }, label = { Text("Importance 1-3") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = expiryDate, onValueChange = { expiryDate = it }, label = { Text("Expiry Date (epoch ms, optional)") }, modifier = Modifier.fillMaxWidth())
-                    Text("Category", fontWeight = FontWeight.Medium)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf("CERTIFICATION", "AWARD", "COMPETITION", "BADGE").size) { index ->
-                            val cat = listOf("CERTIFICATION", "AWARD", "COMPETITION", "BADGE")[index]
-                            FilterChip(selected = category == cat, onClick = { category = cat }, label = { Text(cat) })
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (title.isNotBlank()) {
+            onConfirm = {
+                if (title.isNotBlank()) {
+                    if (editingAchievement != null) {
+                        val updatedAchiv = Achievement (
+                            id = editingAchievement!!.id,
+                            title = title,
+                            issuer = issuer,
+                            category = category,
+                            description = description,
+                            importance = importance.toIntOrNull() ?: 2,
+                            credentialUrl = credentialUrl,
+                            credentialId = credentialId
+                        )
+                        viewModel.updateAchievement(
+            updatedAchiv
+                        )
+                    } else {
                         viewModel.addAchievement(
                             title = title,
                             issuer = issuer,
                             category = category,
                             description = description,
                             importance = importance.toIntOrNull() ?: 2,
-                            credentialUrl = credentialUrl
+                            credentialUrl = credentialUrl,
                         )
-                        showAddDialog = false
                     }
-                }) { Text("Simpan") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("Batal") }
+                    showAddDialog = false
+                    editingAchievement = null
+                    resetForm()
+                }
             }
         )
     }
 }
 
-@Composable
-fun AchievementCard(
-    achievementTitle: String,
-    achievementIssuer: String,
-    achievementCategory: String,
-    achievementImportance: Int,
-    achievementExpiry: Long?,
-    onDelete: () -> Unit
-) {
-    val formatter = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
-    val expiryText = achievementExpiry?.let { formatter.format(Date(it)) } ?: "Tidak ada expirasi"
 
+@Composable
+fun EmptyAchievementState() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = achievementTitle, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color(0xFF1A1A1A))
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = achievementIssuer, fontSize = 12.sp, color = Color.Gray)
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFE3F2FD)) {
-                    Text(text = achievementCategory, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, color = Color(0xFF1E88E5))
-                }
-                Surface(shape = RoundedCornerShape(4.dp), color = if (achievementImportance == 3) Color(0xFFFFEBEE) else Color(0xFFF1F8E9)) {
-                    Text(text = "Importance: $achievementImportance", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, color = Color.Gray)
-                }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "Expiry: $expiryText", fontSize = 11.sp, color = Color.Gray)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                Icons.Outlined.EmojiEvents,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = Color(0xFFD1D5DB)
+            )
+            Text(
+                text = "Belum ada achievement",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF6B7280)
+            )
+            Text(
+                text = "Tambahkan sertifikat, penghargaan, atau pencapaianmu",
+                fontSize = 13.sp,
+                color = Color(0xFF9CA3AF),
+                lineHeight = 18.sp
+            )
         }
     }
 }
 
+@Composable
+fun EnhancedAchievementCard(
+    achievement: Achievement,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onOpenUrl: () -> Unit
+) {
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+    val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
+
+    val categoryColor = remember(achievement.category) {
+        when (achievement.category) {
+            "CERTIFICATION" -> Color(0xFF2563EB)
+            "AWARD" -> Color(0xFFF59E0B)
+            "COMPETITION" -> Color(0xFF7C3AED)
+            "BADGE" -> Color(0xFF10B981)
+            else -> Color(0xFF6B7280)
+        }
+    }
+
+    val categoryIcon = remember(achievement.category) {
+        when (achievement.category) {
+            "CERTIFICATION" -> Icons.Outlined.Verified
+            "AWARD" -> Icons.Outlined.EmojiEvents
+            "COMPETITION" -> Icons.Outlined.Groups
+            "BADGE" -> Icons.Outlined.MilitaryTech
+            else -> Icons.Outlined.Star
+        }
+    }
+
+    val categoryLabel = remember(achievement.category) {
+        when (achievement.category) {
+            "CERTIFICATION" -> "Sertifikasi"
+            "AWARD" -> "Penghargaan"
+            "COMPETITION" -> "Kompetisi"
+            "BADGE" -> "Badge"
+            else -> achievement.category
+        }
+    }
+
+    val isExpired = remember(achievement.expiryDate) {
+        achievement.expiryDate != null && achievement.expiryDate < System.currentTimeMillis()
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (achievement.importance == 3) Color(0xFFFFFBEB) else Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = if (achievement.importance == 3) {
+            BorderStroke(1.dp, Color(0xFFFDE68A))
+        } else null
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Category icon
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(categoryColor.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        categoryIcon,
+                        contentDescription = achievement.category,
+                        modifier = Modifier.size(24.dp),
+                        tint = categoryColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    // Title & Importance
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = achievement.title,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF111827),
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        // Importance stars
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            repeat(3) { index ->
+                                Icon(
+                                    if (index < achievement.importance) Icons.Filled.Star else Icons.Outlined.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (index < achievement.importance) {
+                                        when (achievement.importance) {
+                                            3 -> Color(0xFFF59E0B)
+                                            2 -> Color(0xFF6B7280)
+                                            else -> Color(0xFF9CA3AF)
+                                        }
+                                    } else {
+                                        Color(0xFFD1D5DB)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Issuer
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = achievement.issuer,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF6B7280)
+                    )
+
+                    // Description
+                    if (achievement.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = achievement.description,
+                            fontSize = 13.sp,
+                            color = Color(0xFF9CA3AF),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Tags
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Category badge
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = categoryColor.copy(alpha = 0.1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    categoryIcon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = categoryColor
+                                )
+                                Text(
+                                    text = categoryLabel,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = categoryColor
+                                )
+                            }
+                        }
+
+                        // Credential ID
+                        if (achievement.credentialId.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFF3F4F6)
+                            ) {
+                                Text(
+                                    text = "ID: ${achievement.credentialId}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF6B7280)
+                                )
+                            }
+                        }
+
+                        // Expiry badge
+                        if (achievement.expiryDate != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isExpired) Color(0xFFFEF2F2) else Color(0xFFF0FDF4)
+                            ) {
+                                Text(
+                                    text = if (isExpired) "Expired" else "Berlaku",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isExpired) Color(0xFFDC2626) else Color(0xFF059669)
+                                )
+                            }
+                        }
+                    }
+
+                    // Expiry date
+                    if (achievement.expiryDate != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = if (isExpired) Color(0xFFDC2626) else Color(0xFF9CA3AF)
+                            )
+                            Text(
+                                text = "Berlaku hingga: ${dateFormat.format(Date(achievement.expiryDate))}",
+                                fontSize = 11.sp,
+                                color = if (isExpired) Color(0xFFDC2626) else Color(0xFF9CA3AF)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Credential URL
+            if (achievement.credentialUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenUrl() }
+                        .padding(vertical = 4.dp, horizontal = 8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF9FAFB)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Link,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = Color(0xFF2563EB)
+                    )
+                    Text(
+                        text = "Lihat Kredensial",
+                        fontSize = 13.sp,
+                        color = Color(0xFF2563EB),
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        Icons.Outlined.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = Color(0xFF2563EB)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onEdit,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Edit",
+                        fontSize = 13.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                TextButton(
+                    onClick = { showDeleteConfirmation = true },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFFDC2626)
+                    )
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Hapus",
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+
+    // Delete Confirmation
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Text(
+                    text = "Hapus Achievement",
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text("Apakah kamu yakin ingin menghapus \"${achievement.title}\"?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDelete()
+                        showDeleteConfirmation = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFDC2626)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AchievementDialog(
+    isEditing: Boolean,
+    title: String,
+    onTitleChange: (String) -> Unit,
+    issuer: String,
+    onIssuerChange: (String) -> Unit,
+    category: String,
+    onCategoryChange: (String) -> Unit,
+    description: String,
+    onDescriptionChange: (String) -> Unit,
+    credentialUrl: String,
+    onCredentialUrlChange: (String) -> Unit,
+    credentialId: String,
+    onCredentialIdChange: (String) -> Unit,
+    importance: String,
+    onImportanceChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val categories = listOf(
+        "CERTIFICATION" to "Sertifikasi",
+        "AWARD" to "Penghargaan",
+        "COMPETITION" to "Kompetisi",
+        "BADGE" to "Badge"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = if (isEditing) "Edit Achievement" else "Tambah Achievement",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF111827)
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Title
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = onTitleChange,
+                    label = { Text("Judul") },
+                    placeholder = { Text("Masukkan judul achievement...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Issuer & Credential ID
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = issuer,
+                        onValueChange = onIssuerChange,
+                        label = { Text("Penerbit") },
+                        placeholder = { Text("Nama institusi") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = credentialId,
+                        onValueChange = onCredentialIdChange,
+                        label = { Text("ID Kredensial") },
+                        placeholder = { Text("Opsional") },
+                        modifier = Modifier.weight(0.7f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Description
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = onDescriptionChange,
+                    label = { Text("Deskripsi") },
+                    placeholder = { Text("Deskripsi singkat...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Credential URL
+                OutlinedTextField(
+                    value = credentialUrl,
+                    onValueChange = onCredentialUrlChange,
+                    label = { Text("URL Kredensial") },
+                    placeholder = { Text("https://...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Category
+                Column {
+                    Text(
+                        text = "Kategori",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF374151)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { (key, label) ->
+                            FilterChip(
+                                selected = category == key,
+                                onClick = { onCategoryChange(key) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF2563EB),
+                                    selectedLabelColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Importance
+                Column {
+                    Text(
+                        text = "Tingkat Kepentingan",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF374151)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "1" to "Biasa",
+                            "2" to "Penting",
+                            "3" to "Sangat Penting"
+                        ).forEach { (value, label) ->
+                            FilterChip(
+                                selected = importance == value,
+                                onClick = { onImportanceChange(value) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF2563EB),
+                                    selectedLabelColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = title.isNotBlank() && issuer.isNotBlank(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF2563EB)
+                )
+            ) {
+                Text(
+                    text = if (isEditing) "Simpan" else "Tambah",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Batal",
+                    color = Color(0xFF6B7280)
+                )
+            }
+
+        })
+}
+
+// Helper functions
+private fun resetForm() {
+    // Reset handled by remember states in the composable
+}
+
+@Composable
+private fun rememberScrollState(): ScrollState {
+    return rememberScrollState()
+}

@@ -32,6 +32,10 @@ interface TaskDao {
     @Query("SELECT * FROM tasks_table WHERE is_completed = 1 ORDER BY updated_at DESC")
     fun getCompletedTasks(): Flow<List<Task>>
 
+    @Query("SELECT * FROM tasks_table WHERE is_completed = 0 ORDER BY updated_at DESC")
+    fun getUncompletedTasks(): Flow<List<Task>>
+
+
     @Query("SELECT * FROM tasks_table WHERE category = :category AND is_completed = 0 ORDER BY deadline ASC")
     fun getActiveTasksByCategory(category: String): Flow<List<Task>>
 
@@ -46,6 +50,10 @@ interface TaskDao {
 
     @Query("UPDATE tasks_table SET is_completed = 1, updated_at = :updatedTime WHERE id = :taskId")
     suspend fun markTaskAsCompleted(taskId: Int, updatedTime: Long = System.currentTimeMillis())
+
+    @Query("UPDATE tasks_table SET is_completed = 0, updated_at = :updatedTime WHERE id = :taskId")
+    suspend fun markTaskAsUncompleted(taskId: Int, updatedTime: Long = System.currentTimeMillis())
+
 
     @Query("DELETE FROM tasks_table WHERE id = :taskId")
     suspend fun deleteTaskById(taskId: Int)

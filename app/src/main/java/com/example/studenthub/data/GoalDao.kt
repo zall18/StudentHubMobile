@@ -46,4 +46,7 @@ interface GoalDao {
 
     @Query("SELECT COUNT(*) FROM goals WHERE status = 'COMPLETED'")
     fun getCompletedGoalCount(): Flow<Int>
+
+    @Query("UPDATE goals SET status = :newStatus WHERE id = :goalId")
+    suspend fun updateGoalStatus(goalId: Int, newStatus: String)
 }

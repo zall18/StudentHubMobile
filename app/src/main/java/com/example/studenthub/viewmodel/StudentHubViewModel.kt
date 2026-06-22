@@ -126,6 +126,11 @@ class StudentHubViewModel(
 
     fun goalMilestonesForGoal(goalId: Int) = goalMilestoneDao.getMilestonesByGoal(goalId)
 
+    fun updateGoalStatus(goalId: Int, newStatus: String) {
+        viewModelScope.launch {
+            goalDao.updateGoalStatus(goalId, newStatus)
+        }
+    }
     // ====== TASK FUNCTIONS ======
     fun addTask(
         title: String,
@@ -155,6 +160,12 @@ class StudentHubViewModel(
     fun completeTask(taskId: Int) {
         viewModelScope.launch {
             taskDao.markTaskAsCompleted(taskId)
+        }
+    }
+
+    fun uncompleteTask(taskId: Int) {
+        viewModelScope.launch {
+            taskDao.markTaskAsUncompleted(taskId)
         }
     }
 
